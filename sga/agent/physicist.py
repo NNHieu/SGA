@@ -32,6 +32,8 @@ except ImportError as e:
 
 from sga.config.llm import BaseLLMConfig
 
+from sga.sr.dataclasses import SEDTask
+
 
 @dataclass
 class AnalysisData(object):
@@ -243,7 +245,10 @@ class BasePhysicist(object):
                 api_key=self.api_key if self.api_key is not None else os.environ.get('ANTHROPIC_API_KEY'), max_retries=5)
         elif cfg.name.startswith('openai'):
             self.client = OpenAI(
-                api_key=self.api_key if self.api_key is not None else os.getenv('OPENAI_API_KEY'), max_retries=5)
+                # base_url=f"http://localhost:10003/v1",
+                base_url=os.environ['API_URL'],
+                api_key=self.api_key if self.api_key is not None else os.getenv('OPENAI_API_KEY'), 
+                max_retries=5)
         elif cfg.name.startswith('mistral'):
             self.client = MistralClient(
                 api_key=self.api_key if self.api_key is not None else os.getenv('MISTRAL_API_KEY'), max_retries=5, timeout=5 * 60)
@@ -435,3 +440,88 @@ class MolecularPhysicist(BasePhysicist):
         self.prompts['epilogue'] = self.prompts['epilogue'].format(format=self.prompts['format'])
 
         self.example_code = (self.prompt_root / 'example.py').read_text('utf-8')
+
+class SRPhysicist(BasePhysicist):
+
+    def __init__(self, 
+                 cfg: BaseLLMConfig, 
+                 seed: int, 
+                 task_info: SEDTask,
+                 env_info: Optional[str] = None) -> None:
+        super().__init__(cfg, seed, env_info)
+
+        self.parsing_task(task_info)
+
+        self.prompts['prologue'] = self.prompts['prologue'].format(
+            context=self.separator.join([self.prompts['context'],self.env_info]),
+            task=self.prompts['task'])
+        self.prompts['format'] = self.prompts['format'].format(code=self.prompts['code_tmpl'])
+        self.prompts['epilogue'] = self.prompts['epilogue'].format(format=self.prompts['format'])
+
+    def parsing_task(self, task_info: SEDTask):
+        var_name = task_info.symbols
+        var_desc = task_info.symbol_descs
+
+        param_inputs = "param: float = DEFAULT_VALUE"
+        param_desc   = "param (float): the physical meaning of the parameter."
+        param_init = "self.param = nn.Parameter(torch.tensor(param, dtype=torch.float))"
+        
+        function_input_desc = ", ".join([f"{name}: torch.Tensor" for name in  var_name[1:]])
+
+        function_desc = f'""" Mathematical function for {var_desc[0]}\n\n' + \
+        '        Args:\n' + \
+        "\n".join([f"            {name}: {desc}." for name, desc in zip(var_name[1:], var_desc[1:])]) + "\n" + \
+        "            \n" + \
+        "        Return:\n" + \
+        f"            {var_name[0]}: {var_desc[0]}.\n" + \
+        '        """\n' + \
+        f'        return {var_name[0]}'
+
+        code_tmpl = self.prompts['code_tmpl']
+
+        self.prompts['code_tmpl'] = code_tmpl.format(
+            param_inputs = param_inputs,
+            param_desc = param_desc,
+            param_init = param_init,
+            input_variables = function_input_desc,
+            forward_function_description = function_desc,
+        )
+        
+        if len(var_desc) > 2:
+            input_desc = ", ".join(var_desc[1:-1]) + ", and " + var_desc[-1]
+        else:
+            input_desc = var_desc[-1]
+
+        self.prompts['context'] = self.prompts['context'].format(
+            input_output=f"The expression represents {var_desc[0]}, given data on {input_desc}.\n"
+        )
+
+        # print(self.prompts['code_tmpl'])
+        # print("-----")
+        # print(self.prompts['context'])
+
+
+        # Primitive code
+        param_inputs = ', '.join([f"c_{i}: float = 1.0" for i in range(len(var_name))])
+        param_desc   = '\n            '.join([f"c_{i} (float): coefficient." for i in range(len(var_name))])
+        param_init = '\n        '.join([f"self.c_{i} = nn.Parameter(torch.tensor(c_{i}, dtype=torch.float))" for i in range(len(var_name))])
+
+        function_desc = f'"""Mathematical function for {var_desc[0]}\n\n' + \
+        '        Args:\n' + \
+        "\n".join([f"            {name}: {desc}." for name, desc in zip(var_name[1:], var_desc[1:])]) + "\n" + \
+        "            \n" + \
+        "        Return:\n" + \
+        f"            {var_name[0]}: {var_desc[0]}.\n" + \
+        '        """\n' + \
+        f"        {var_name[0]} = self.c_0 + " + " + ".join([f"self.c_{i + 1} * {name}" for i, name in enumerate(var_name[1:])]) + "\n" + \
+        f"        return {var_name[0]}"
+
+        self.primitive_code = code_tmpl.format(
+            param_inputs = param_inputs,
+            param_desc = param_desc,
+            param_init = param_init,
+            input_variables = function_input_desc,
+            forward_function_description = function_desc
+        )
+        # print("-----")
+        # print(self.primitive_code)
