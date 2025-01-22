@@ -245,8 +245,7 @@ class BasePhysicist(object):
                 api_key=self.api_key if self.api_key is not None else os.environ.get('ANTHROPIC_API_KEY'), max_retries=5)
         elif cfg.name.startswith('openai'):
             self.client = OpenAI(
-                # base_url=f"http://localhost:10003/v1",
-                base_url=os.environ['API_URL'],
+                base_url=cfg.api_url,
                 api_key=self.api_key if self.api_key is not None else os.getenv('OPENAI_API_KEY'), 
                 max_retries=5)
         elif cfg.name.startswith('mistral'):
@@ -463,7 +462,7 @@ class SRPhysicist(BasePhysicist):
         var_desc = task_info.symbol_descs
 
         param_inputs = "param: float = DEFAULT_VALUE"
-        param_desc   = "param (float): the physical meaning of the parameter."
+        param_desc   = "param (float): <the meaning of the parameter>"
         param_init = "self.param = nn.Parameter(torch.tensor(param, dtype=torch.float))"
         
         function_input_desc = ", ".join([f"{name}: torch.Tensor" for name in  var_name[1:]])

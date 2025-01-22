@@ -16,6 +16,10 @@ import sga
 from sga.agent import SRPhysicist, Population
 from sga.sr.datamodules import get_datamodule
 
+from dotenv import load_dotenv
+load_dotenv()
+
+
 root = sga.utils.get_root(__file__)
 
 
@@ -103,11 +107,19 @@ def main():
     parser.add_argument('--path', type=str)
     parser.add_argument('--dataset_path', type=str)
     parser.add_argument('--problem_index', type=int)
+    parser.add_argument('--llm_config_path', type=str)
+    parser.add_argument('--llm_port', type=int, default=10000)
+
+    
 
     args, unknown_args = parser.parse_known_args()
     cfg = sga.config.DefaultConfig(path=args.path, dataset_path=args.dataset_path)
     cfg.update(unknown_args)
     # pprint(cfg)
+
+    llm_config_path = Path(args.llm_config_path)
+    with open(llm_config_path) as f:
+        llm_configs = yaml.safe_load(f)
 
     entry = cfg.llm.entry
     train_py_path = root / 'entry' / entry / 'train.py'
@@ -147,20 +159,28 @@ def main():
     yaml.safe_dump(cfg_dict, (exp_root / 'config.yaml').open('w'))
 
 
-    if cfg.llm.name.startswith('openai-gpt-4'):
-        # dataset_states = torch.load(dataset_root / 'state' / 'ckpt.pt', map_location='cpu')
-        # dataset_feedback = '\n'.join(get_state_feedback(dataset_states, cfg.llm.state_size))
-        dataset_feedback = ''
-    else:
-        dataset_feedback = ''
+    dataset_feedback = ''
+    # if cfg.llm.name.startswith('openai-gpt-4'):
+    #     dataset_states = torch.load(dataset_root / 'state' / 'ckpt.pt', map_location='cpu')
+    #     dataset_feedback = '\n'.join(get_state_feedback(dataset_states, cfg.llm.state_size))
 
     dm = get_datamodule(args.dataset_path)
     dm.setup()
     print(',,,,', args.problem_index)
     problem = dm.problems[args.problem_index]
+        
 
-    cfg.llm.api_key = "token-abc123"
-    cfg.llm.model = "meta-llama/Llama-3.1-8B-Instruct"
+    if llm_configs['type'] == 'vllm':
+        cfg.llm.api_key = os.environ['VLLM_API_KEY']
+        cfg.llm.model = llm_configs['model']
+        cfg.llm.api_url = llm_configs['api_url'].format(args.llm_port)
+    elif llm_configs['type'] == 'openai':
+        cfg.llm.api_key = os.environ['OPENAI_API_KEY']
+        cfg.llm.model = llm_configs['model']
+        cfg.llm.api_url = llm_configs['api_url']
+    else:
+        raise ValueError
+
 
     physicist = SRPhysicist(cfg.llm, 
                             seed=seed, 

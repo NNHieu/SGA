@@ -12,6 +12,8 @@ class BaseLLMConfig(Config):
     partition: str = 'gap'
     train: bool = True
 
+    api_url: str | None = None
+    
     num_iters: int = 5
     batch_size: int = 5
     state_size: int = 10

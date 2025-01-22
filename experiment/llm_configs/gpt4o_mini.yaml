@@ -1,0 +1,4 @@
+type: openai
+name: openai-gpt-4o-mini-2024-07-18
+api_url: "https://api.openai.com/v1"
+model: "gpt-4o-mini-2024-07-18"

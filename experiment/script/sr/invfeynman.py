@@ -3,6 +3,7 @@ import subprocess
 import os
 import sys
 from datetime import datetime
+import yaml
 
 from sga.utils import get_root, get_script_parser, dict_to_cmds
 
@@ -15,16 +16,16 @@ def main():
     base_cmds = [python_path, program_path]
 
     parser = get_script_parser()
-    parser.add_argument('--llm', type=str, default='openai-gpt-4-1106-preview', choices=[
-        'openai-gpt-4-1106-preview',
-        'openai-gpt-3.5-turbo-0125',
-        'mistral-open-mixtral-8x7b',
-        'anthropic-claude-3-sonnet-20240229',
-    ])
+    parser.add_argument('--llm_config_path', type=str)
+    parser.add_argument('--llm_port', type=int, default=10000)
     base_args = parser.parse_args()
     base_args = vars(base_args)
 
     base_args['overwrite'] = True
+
+    llm_config_path = Path(base_args['llm_config_path'])
+    with open(llm_config_path) as f:
+        llm_configs = yaml.safe_load(f)
 
     my_env = os.environ.copy()
     my_env['CUDA_VISIBLE_DEVICES'] = str(base_args['gpu'])
@@ -34,7 +35,7 @@ def main():
     for seed in range(5):
         args = base_args | {
             'seed': seed,
-            'path': f'{base_args["llm"]}/inv_feynman/{seed:04d}',
+            'path': f'{llm_configs["name"]}/inv_feynman/{seed:04d}',
             'dataset_path': 'invfeynman',
             'problem_index': '0',
             'llm.primitives': '(linear)',

@@ -1,0 +1,4 @@
+type: vllm
+name: llama-3.1-8B-instruct
+api_url: http://localhost:{}/v1
+model: meta-llama/Llama-3.1-8B-Instruct

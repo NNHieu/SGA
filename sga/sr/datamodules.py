@@ -15,8 +15,7 @@ FEYNMAN_REPO_ID = "nnheui/sed_feynman"
 TRANSFORMED_FEYNMAN_REPO_ID = "nnheui/sed_transformed_feynman"
 
 def _download(repo_id):
-    return snapshot_download(repo_id=repo_id, 
-                      repo_type="dataset")
+    return snapshot_download(repo_id=repo_id, repo_type="dataset")
 
 class FeynmanDataModule:
     def __init__(self):
@@ -137,6 +136,11 @@ class BaseSynthDataModule:
                 data = [info[k][s] for s in symbols]
                 data = np.stack(data, axis=1)
                 samples[k] = data
+
+            if np.any(np.isnan(samples['train_data'])):
+                continue
+            if np.any(np.isnan(samples['id_test_data'])):
+                continue
 
             p = SynProblem(dataset_identifier=self._dataset_identifier,
                         equation_idx = self._short_dataset_identifier + str(equation_index),
